@@ -1,11 +1,7 @@
 import sys
 import random
 import time
-import threading
 import pygame
-
-import csv
-import os
 
 def update_scoreboard(filename: str, players: list[str], score: list[int]):
     import csv
@@ -183,7 +179,7 @@ class Dice:
             self.set_anim('roll')
             if self.game.audio_on:
                 self.game.dice_sound.play()
-            threading.Timer(self.anim.dur, lambda: self.set_anim(self.value)).start()
+            self.game.functions_to_call.append((self.anim.dur+time.time(), lambda: self.set_anim(self.value)))
     
     def reset(self):
         self.rolled = False
@@ -228,6 +224,7 @@ class Game:
         self.turn = 0
         self.last_rolled = 0
         self.score = score
+        self.functions_to_call = []
 
         # Board dimensions
         self.BOARD_WIDTH = 600
@@ -242,6 +239,8 @@ class Game:
         self.audio_on = audio_on
         self.click_sound = pygame.mixer.Sound('assets/button.wav')
         self.dice_sound = pygame.mixer.Sound('assets/dice.wav')
+        self.stakes = 1
+        self.can_use_cube = [True, True]
 
         # Dice dimensions
         self.DICE_SIZE = 50
@@ -305,6 +304,8 @@ class Game:
         """
         # self.pieces = [x+y for x,y in zip([self.pos_value.get(i, 0) for i in range(24)], [-self.pos_value.get(23-i, 0) for i in range(24)])]
         self.pieces = [-2, 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, -5, 5, 0, 0, 0, -3, 0, -5, 0, 0, 0, 0, 2]
+        # self.pieces = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2]
+        # self.pieces_removed = [13, 13]
         
    
     def reset_game(self):
@@ -318,7 +319,11 @@ class Game:
         self.moves_left = [0, 0, 0, 0]
         self.current_player = 0
 
- 
+    def get_points_to_give(self, player):
+        if self.get_player_pieces(player) == 0 and self.pieces_removed[player == -1] == 15 and not self.current_text in [f"{self.player_names[player == -1]} wins the game!", f"{self.player_names[player == -1]} wins this round!"]:
+            if (self.get_furthest_piece(player*-1) > 17 or self.player_has_dead_pieces(player*-1)) and self.pieces_removed[player*-1 == -1] == 0:return 3
+            elif self.pieces_removed[player*-1 == -1] == 0:return 2
+            else:return 1
     def can_remove_pieces(self, player):
         s = 0
         for i in range(*((0,6) if player == 1 else (18,24))):
@@ -527,24 +532,28 @@ class Game:
         clock = pygame.time.Clock()
         running = True
         while not self.game_over and running:
+            for time_to_call, func in self.functions_to_call:
+                if time.time()> time_to_call:
+                    func()
+                    self.functions_to_call.remove((time_to_call, func))
             for player in [-1, 1]:
                 if self.get_player_pieces(player) == 0 and self.pieces_removed[player == -1] == 15 and not self.current_text in [f"{self.player_names[player == -1]} wins the game!", f"{self.player_names[player == -1]} wins this round!"]:
-                    self.score[player == -1] += 1
+                    self.score[player == -1] += self.get_points_to_give(player) * self.stakes
                     self.winner_decided = True
-                    if self.score[player == -1] >= (self.points_to_win//2 +1):
+                    if self.score[player == -1] >= (self.points_to_win):
                         self.current_text = f"{self.player_names[player == -1]} wins the game!"
-                        threading.Timer(4, lambda: (setattr(self, 'game_over', True), setattr(self, 'current_text', ''))).start()
+                        self.functions_to_call.append((4+time.time(), lambda: (setattr(self, 'game_over', True), setattr(self, 'current_text', ''))))
                         update_scoreboard('scoreboard.csv', self.player_names, [max(0, score-(max(self.score)-1)) for score in self.score])
                     else:
                         self.current_text = f"{self.player_names[player == -1]} wins this round!"
-                        threading.Timer(4, lambda: (setattr(self, 'current_text', ''), self.reset_game())).start()
+                        self.functions_to_call.append((4+time.time(), lambda: (setattr(self, 'current_text', ''), self.reset_game())))
                         continue
 
             if self.player_has_dead_pieces(self.current_player) and self.current_player and self.rolled and not self.game_over:
                 self.piece_chosen = 24 if self.current_player == 1 else -1
                 if not self.legal_moves(self.piece_chosen):
                     self.current_text = "No Legal Moves. Skipping Turn."
-                    threading.Timer(4, lambda: setattr(self, 'current_text', '')).start()
+                    self.functions_to_call.append((4+time.time(), lambda: setattr(self, 'current_text', '')))
                     self.rolled = False
                     self.turn += 1
                     self.current_player *= -1
@@ -560,6 +569,8 @@ class Game:
                 elif event.type == pygame.MOUSEBUTTONDOWN and not self.game_over and not self.winner_decided:
                     mouse_pos = pygame.mouse.get_pos()
                     # Handle mouse clicks (e.g., rolling dice, moving pawns)
+                    if self.can_use_cube[self.current_player == -1]:
+                        pass
                     for dice in self.dices:
                         if time.time() - self.last_rolled > 0.4 and dice.rect().collidepoint(mouse_pos):
                             if self.turn == 0:
@@ -627,13 +638,13 @@ class Game:
                 if self.turn == 0:
                     if self.dices[0].value < self.dices[1].value:
                         self.current_text = "White player plays first"
-                        threading.Timer(4, lambda: setattr(self, 'current_text', '')).start()
+                        self.functions_to_call.append((4+time.time(), lambda: setattr(self, 'current_text', '')))
                         self.moves_left = [self.dices[0].value, self.dices[1].value, 0, 0]
                         self.rolled = True
                         self.current_player = 1
                     elif self.dices[0].value > self.dices[1].value:
                         self.current_text = "Black player plays first"
-                        threading.Timer(4, lambda: setattr(self, 'current_text', '')).start()
+                        self.functions_to_call.append((4+time.time(), lambda: setattr(self, 'current_text', '')))
                         self.current_player = -1
                         self.moves_left = [self.dices[0].value, self.dices[1].value, 0, 0]
                         self.rolled = True
@@ -641,7 +652,7 @@ class Game:
                         self.dices[0].reset()
                         self.dices[1].reset()
                         self.current_text = "Double rolled! Roll again."
-                        threading.Timer(4, lambda: setattr(self, 'current_text', '')).start()
+                        self.functions_to_call.append((4+time.time(), lambda: setattr(self, 'current_text', '')))
                 else:
                     if self.dices[0].value == self.dices[1].value:
                         self.moves_left = [self.dices[0].value for i in range(4)]
@@ -660,7 +671,7 @@ class Game:
                         legal_moves_exist = self.legal_moves(24 if self.current_player == 1 else -1)
                     if not legal_moves_exist:
                         self.current_text = "No legal moves available. Switching player."
-                        threading.Timer(4, lambda: setattr(self, 'current_text', '')).start()
+                        self.functions_to_call.append((4+time.time(), lambda: setattr(self, 'current_text', '')))
                         self.rolled = False
                         self.turn += 1
                         self.current_player = -1 if self.current_player == 1 else 1

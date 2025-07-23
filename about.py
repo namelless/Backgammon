@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QLabel, QApplication
+from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QApplication
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
@@ -27,43 +27,53 @@ class AboutWindow(QDialog):
         self.background.setPixmap(QPixmap("assets/aboutme_wallpaper.jpg"))
         self.background.setScaledContents(True)
 
-        # Name
+        # Name label
         self.label1 = QLabel("Name: Joel Malich", self)
         self.label1.setGeometry(20, 10, 300, 30)
         self.label1.setStyleSheet("font-size: 22px; color: black; font-weight: bold;")
 
-        # Email
+        # Email icon and label
         self.image1 = QLabel(self)
         self.image1.setPixmap(QPixmap("assets/email.png"))
         self.image1.setGeometry(20, 50, 30, 30)
+
         self.label2 = QLabel("joel.malich@s.afeka.ac.il", self)
         self.label2.setGeometry(60, 50, 400, 30)
         self.label2.setStyleSheet("color: #0044cc; text-decoration: underline;")
 
-        # LinkedIn
+        # LinkedIn icon and label
         self.image2 = QLabel(self)
         self.image2.setPixmap(QPixmap("assets/linkedin.png"))
         self.image2.setGeometry(20, 90, 30, 30)
+
         self.label3 = QLabel('<a href="https://www.linkedin.com/in/joel-malich-b04a65202/">Joel Malich</a>', self)
         self.label3.setGeometry(60, 90, 400, 30)
         self.label3.setOpenExternalLinks(True)
         self.label3.setStyleSheet("color: #006699; font-size: 20px;")
 
-        # Profile Picture or Related Image
+        # Big image on the right
         self.image3 = QLabel(self)
         self.image3.setPixmap(QPixmap("assets/snowwall.webp"))
         self.image3.setGeometry(320, 10, 300, 300)
         self.image3.setScaledContents(True)
 
-        # University Logo
+        # Bottom left image
         self.image4 = QLabel(self)
         self.image4.setPixmap(QPixmap("assets/afeka.jpg"))
         self.image4.setGeometry(40, 190, 220, 100)
         self.image4.setScaledContents(True)
 
+        # Close button
+        self.close_button = QPushButton("Close", self)
+        self.close_button.setGeometry(550, 290, 80, 30)
+        self.close_button.clicked.connect(self.close)
+
+        # Remove '?' help button on Windows
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
 
 if __name__ == "__main__":
     app = QApplication([])
     window = AboutWindow()
-    window.exec()
+    window.show()
+    app.exec()

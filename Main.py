@@ -1,13 +1,14 @@
 import sys
 import os
-import csv
-import subprocess
 from Game import Game
 from about import AboutWindow
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QRadioButton, QButtonGroup, QMessageBox
 )
+from scores import HighScoresWindow
+from settings import PointsToWinSelector, SettingsWindow
+from users import PlayerHistoryViewer
 from PySide6.QtGui import QPixmap, QIcon, QColor, QPalette, QPainter, QPainterPath, QPen
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -103,7 +104,7 @@ class BackgammonMenu(QMainWindow):
         label = QLabel(text)
         label.setStyleSheet("font-size: 18px; color: white;")
         return label
-
+    
     def show_main_menu(self):
         self.clear_layout(self.overlay_layout)
 
@@ -126,6 +127,29 @@ class BackgammonMenu(QMainWindow):
 
         create_button("Play", "#007BFF", self.show_game_settings)
         create_button("User History", "#17A2B8", self.show_user_history)
+
+        high_scores_button = QPushButton("High Scores")
+        high_scores_button.setStyleSheet("""
+            background-color: #28A745;
+            color: white;
+            font-size: 24px;
+            padding: 10px 20px;
+            border-radius: 5px;
+        """)
+        high_scores_button.clicked.connect(self.show_high_scores)
+        self.overlay_layout.addWidget(high_scores_button, alignment=Qt.AlignCenter)
+
+        settings_button = QPushButton("Settings")
+        settings_button.setStyleSheet("""
+            background-color: #343A40;
+            color: white;
+            font-size: 24px;
+            padding: 10px 20px;
+            border-radius: 5px;
+        """)
+        settings_button.clicked.connect(self.show_settings_window)
+        self.overlay_layout.addWidget(settings_button, alignment=Qt.AlignCenter)
+
         create_button("Watch Video", "#FFC107", self.open_video_window)
         create_button("Open .docx File", "#DC3545", self.open_docx_file)
 
@@ -140,12 +164,20 @@ class BackgammonMenu(QMainWindow):
         about_button.clicked.connect(self.show_about_window)
         self.overlay_layout.addWidget(about_button, alignment=Qt.AlignCenter)
 
+    def show_high_scores(self):
+        self.high_scores_window = HighScoresWindow()
+        self.high_scores_window.show()
+    
+    def show_settings_window(self):
+        self.settings_window = SettingsWindow()
+        self.settings_window.show()
+
     def show_about_window(self):
         self.about_window = AboutWindow()
-        self.about_window.exec()
+        self.about_window.show()
 
     def open_video_window(self):
-        video_path = "assets/Game_review.mp4"
+        video_path = "video"
         self.video_window = VideoPlayerWindow(video_path)
         self.video_window.show()
 
@@ -155,19 +187,19 @@ class BackgammonMenu(QMainWindow):
             QMessageBox.critical(self, "Error", f"File not found: {docx_path}")
             return
         try:
-            if sys.platform.startswith("win"):
+            if sys.platform.startswith('win'):
                 os.startfile(docx_path)
-            elif sys.platform.startswith("darwin"):
-                subprocess.run(["open", docx_path])
+            elif sys.platform.startswith('darwin'):
+                os.system(f'open "{docx_path}"')
             else:
-                subprocess.run(["xdg-open", docx_path])
+                os.system(f'xdg-open "{docx_path}"')
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open file:\n{e}")
 
     def show_game_settings(self):
         self.clear_layout(self.overlay_layout)
 
-        header = OutlinedLabel("Game Settings", outline_color=Qt.black, outline_width=3)
+        header = OutlinedLabel("Enter Player Names", outline_color=Qt.black, outline_width=3)
         header.setAlignment(Qt.AlignCenter)
         header.setStyleSheet("font-size: 32px; color: white; font-weight: bold;")
 
@@ -193,29 +225,6 @@ class BackgammonMenu(QMainWindow):
         player_names_layout.addWidget(self.player2_input)
         form_layout.addLayout(player_names_layout)
 
-        form_layout.addWidget(self._styled_label("Points to Win:"))
-        self.points_to_win_group = QButtonGroup(self)
-        points_layout = QHBoxLayout()
-        for val in [3, 5, 7, 9, 11]:
-            btn = QRadioButton(str(val))
-            btn.setStyleSheet("font-size: 18px; color: white;")
-            if val == 5:
-                btn.setChecked(True)
-            self.points_to_win_group.addButton(btn)
-            points_layout.addWidget(btn)
-        form_layout.addLayout(points_layout)
-
-        form_layout.addWidget(self._styled_label("Audio:"))
-        self.audio_on = QRadioButton("On")
-        self.audio_off = QRadioButton("Off")
-        self.audio_on.setChecked(True)
-        for btn in [self.audio_on, self.audio_off]:
-            btn.setStyleSheet("font-size: 18px; color: white;")
-        audio_layout = QHBoxLayout()
-        audio_layout.addWidget(self.audio_off)
-        audio_layout.addWidget(self.audio_on)
-        form_layout.addLayout(audio_layout)
-
         button_layout = QHBoxLayout()
         start_button = QPushButton("Start Game")
         start_button.setStyleSheet("background-color: #28A745; color: white; font-size: 18px; padding: 10px 20px;")
@@ -239,9 +248,11 @@ class BackgammonMenu(QMainWindow):
         if not p1 or not p2:
             QMessageBox.warning(self, "Error", "Please enter names for both players.")
             return
+        if p1.lower() == p2.lower():
+            QMessageBox.warning(self, "Error", "Player names must be different.")
+            return
 
-        points = next(int(btn.text()) for btn in self.points_to_win_group.buttons() if btn.isChecked())
-        audio = self.audio_on.isChecked()
+        audio, points = [int(char) for char in open("settings.txt").read().strip().split(",")]
 
         confirm = QMessageBox.question(
             self, "Confirm Settings",
@@ -253,91 +264,13 @@ class BackgammonMenu(QMainWindow):
             player_names = (p1, p2)
             score = [0, 0]
             game_instance = Game(self, player_names, points, score)
+            game_instance.audio_on = audio
             game_instance.run()
 
     def show_user_history(self):
-        self.clear_layout(self.overlay_layout)
-
-        header = OutlinedLabel("User History", outline_color=Qt.black, outline_width=3)
-        header.setAlignment(Qt.AlignCenter)
-        header.setStyleSheet("font-size: 32px; color: white; font-weight: bold;")
-
-        container = QWidget()
-        container.setStyleSheet("""
-            background-color: rgba(0, 0, 0, 180);
-            border-radius: 15px;
-            padding: 20px;
-        """)
-        layout = QVBoxLayout(container)
-
-        input_layout = QHBoxLayout()
-        self.history_name1 = QLineEdit()
-        self.history_name1.setPlaceholderText("Player 1 Name")
-        self.history_name1.setStyleSheet("font-size: 20px; padding: 5px;")
-        self.history_name2 = QLineEdit()
-        self.history_name2.setPlaceholderText("Player 2 Name")
-        self.history_name2.setStyleSheet("font-size: 20px; padding: 5px;")
-        input_layout.addWidget(self.history_name1)
-        input_layout.addWidget(self.history_name2)
-        layout.addLayout(input_layout)
-
-        self.score_result_label = QLabel("")
-        self.score_result_label.setStyleSheet("font-size: 22px; color: white;")
-        self.score_result_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.score_result_label)
-
-        btn_layout = QHBoxLayout()
-        check_button = QPushButton("Check Score")
-        check_button.setStyleSheet("background-color: #28A745; color: white; font-size: 18px; padding: 10px 20px;")
-        check_button.clicked.connect(self.check_score_history)
-
-        back_button = QPushButton("Back")
-        back_button.setStyleSheet("background-color: #6C757D; color: white; font-size: 18px; padding: 10px 20px;")
-        back_button.clicked.connect(self.show_main_menu)
-
-        btn_layout.addWidget(back_button)
-        btn_layout.addWidget(check_button)
-        layout.addLayout(btn_layout)
-
-        self.overlay_layout.addWidget(header)
-        self.overlay_layout.addStretch()
-        self.overlay_layout.addWidget(container, alignment=Qt.AlignCenter)
-        self.overlay_layout.addStretch()
-
-    def check_score_history(self):
-        name1 = self.history_name1.text().strip()
-        name2 = self.history_name2.text().strip()
-
-        if not name1 or not name2:
-            QMessageBox.warning(self, "Input Error", "Both names must be filled in.")
-            return
-
-        if name1.lower() == name2.lower():
-            QMessageBox.warning(self, "Input Error", "Names must be different.")
-            return
-
-        csv_path = "scoreboard.csv"
-        if not os.path.exists(csv_path):
-            QMessageBox.warning(self, "File Error", "scoreboard.csv not found.")
-            return
-
-        try:
-            with open(csv_path, newline='', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                headers = rows[0][1:]
-                data = {row[0]: row[1:] for row in rows[1:]}
-
-                if name1 not in data or name2 not in headers:
-                    QMessageBox.information(self, "Not Found", f"No score found for {name1} vs {name2}.")
-                    self.score_result_label.setText("")
-                    return
-
-                index = headers.index(name2)
-                score = data[name1][index]
-                self.score_result_label.setText(f"<b>{name1}</b> vs <b>{name2}</b>: Score = <b>{score}</b>")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to read score: {str(e)}")
+        # Instead of creating UI here, open PlayerHistoryViewer window as a separate window
+        self.player_history_window = PlayerHistoryViewer("scoreboard.csv")
+        self.player_history_window.show()
 
 
 if __name__ == "__main__":
