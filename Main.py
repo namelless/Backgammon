@@ -9,34 +9,10 @@ from PySide6.QtWidgets import (
 from scores import HighScoresWindow
 from settings import PointsToWinSelector, SettingsWindow
 from users import PlayerHistoryViewer
-from PySide6.QtGui import QPixmap, QIcon, QColor, QPalette, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QPixmap, QIcon, QColor, QPalette
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-
-
-class OutlinedLabel(QLabel):
-    def __init__(self, text="", parent=None, outline_color=Qt.black, outline_width=2):
-        super().__init__(text, parent)
-        self.outline_color = outline_color
-        self.outline_width = outline_width
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        path = QPainterPath()
-        font = self.font()
-        fm = self.fontMetrics()
-        text = self.text()
-        x = (self.width() - fm.horizontalAdvance(text)) / 2
-        y = (self.height() + fm.ascent() - fm.descent()) / 2
-        path.addText(x, y, font, text)
-        pen = QPen(self.outline_color)
-        pen.setWidth(self.outline_width)
-        painter.setPen(pen)
-        painter.drawPath(path)
-        painter.setPen(self.palette().color(self.foregroundRole()))
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
 
 
 class VideoPlayerWindow(QMainWindow):
@@ -104,11 +80,11 @@ class BackgammonMenu(QMainWindow):
         label = QLabel(text)
         label.setStyleSheet("font-size: 18px; color: white;")
         return label
-    
+
     def show_main_menu(self):
         self.clear_layout(self.overlay_layout)
 
-        header_label = OutlinedLabel("Backgammon", outline_color=Qt.black, outline_width=3)
+        header_label = QLabel("Backgammon")
         header_label.setAlignment(Qt.AlignCenter)
         header_label.setStyleSheet("font-size: 48px; color: white; font-weight: bold;")
         self.overlay_layout.addWidget(header_label)
@@ -167,7 +143,7 @@ class BackgammonMenu(QMainWindow):
     def show_high_scores(self):
         self.high_scores_window = HighScoresWindow()
         self.high_scores_window.show()
-    
+
     def show_settings_window(self):
         self.settings_window = SettingsWindow()
         self.settings_window.show()
@@ -199,7 +175,7 @@ class BackgammonMenu(QMainWindow):
     def show_game_settings(self):
         self.clear_layout(self.overlay_layout)
 
-        header = OutlinedLabel("Enter Player Names", outline_color=Qt.black, outline_width=3)
+        header = QLabel("Enter Player Names")
         header.setAlignment(Qt.AlignCenter)
         header.setStyleSheet("font-size: 32px; color: white; font-weight: bold;")
 
@@ -268,7 +244,6 @@ class BackgammonMenu(QMainWindow):
             game_instance.run()
 
     def show_user_history(self):
-        # Instead of creating UI here, open PlayerHistoryViewer window as a separate window
         self.player_history_window = PlayerHistoryViewer("scoreboard.csv")
         self.player_history_window.show()
 
